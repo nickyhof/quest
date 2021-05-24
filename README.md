@@ -1,3 +1,6 @@
+# Submission
+[Documentation on my submission](SUBMISSION.md)
+
 # A quest in the clouds
 
 ### Q. What is this quest ?
@@ -18,7 +21,7 @@
 #####   6) Add TLS (https). Its OK to use locally generated certs.
 
 ### Q. How do i know i have solved these stages ?
-#####  Each stage can be tested as follows (where <ip_or_host> is the location where the app is deployed) 
+#####  Each stage can be tested as follows (where <ip_or_host> is the location where the app is deployed)
 #####   1) AWS/Secret page - `http(s)://<ip_or_host>[:port]/`
 #####   2) Docker - `http(s)://<ip_or_host>[:port]/docker`
 #####   3) SECRET_WORD env variable - `http(s)://<ip_or_host>[:port]/secret_word`

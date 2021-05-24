@@ -1,0 +1,12 @@
+name: 'Git Env'
+description: 'Configures git env variables'
+branding:
+  icon: 'code'
+  color: 'blue'
+inputs:
+  gitRef:
+    description: 'The git ref to use for determining the environment. Defaults to the current github ref.'
+    required: false
+runs:
+  using: 'node12'
+  main: 'dist/index.js'

@@ -1,0 +1,39 @@
+name: Destroy
+
+on:
+  delete:
+    branches:
+      - feature/*
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Determine Git Environment
+        uses: ./.github/actions/git-env
+        with:
+          gitRef: ${{ github.event.ref }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 0.15.0
+          terraform_wrapper: false
+
+      - name: Terraform Destroy
+        run: |
+          cd infra
+          terraform init -backend-config="bucket=nicholashofbauer-terraform" -backend-config="key=quest/${{ env.ENV_NAME }}.tfstate" -backend-config="region=us-east-1"
+          terraform destroy -var "environment=${{ env.ENV_NAME }}" -var "image=" -var "secret=" -auto-approve

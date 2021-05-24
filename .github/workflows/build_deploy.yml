@@ -1,0 +1,105 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - master
+      - feature/*
+    paths-ignore:
+      - .github/**
+      - docs/**
+      - README.md
+      - SUBMISSION.md
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+    outputs:
+      image_tag: ${{ steps.docker.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Setup Node
+        uses: actions/setup-node@v1
+        with:
+          node-version: 10.x
+
+      - name: Build App
+        run: npm install
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: docker
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: quest
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image_tag::$IMAGE_TAG"
+
+  deploy:
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+    outputs:
+      url: ${{ steps.terraform.outputs.url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Determine Git Environment (Feature)
+        if: github.ref != 'refs/heads/master'
+        uses: ./.github/actions/git-env
+
+      - name: Determine Git Environment (Prod)
+        if: github.ref == 'refs/heads/master'
+        run: echo "ENV_NAME=prod" >> $GITHUB_ENV
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 0.15.0
+          terraform_wrapper: false
+
+      - name: Terraform Deploy
+        id: terraform
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: quest
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          cd infra
+          terraform init -backend-config="bucket=nicholashofbauer-terraform" -backend-config="key=quest/${{ env.ENV_NAME }}.tfstate" -backend-config="region=us-east-1"
+          terraform apply -var "environment=${{ env.ENV_NAME }}" -var "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" -var "secret=${{ secrets.SECRET_WORD }}" -auto-approve
+
+      - name: Print App Url
+        run: |
+          cd infra
+          echo "$(terraform output app_url)"
